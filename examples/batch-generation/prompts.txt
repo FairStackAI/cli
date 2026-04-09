@@ -1,0 +1,8 @@
+# Product photography batch — one prompt per line
+# Lines starting with # are ignored
+
+A minimalist wireless charger on a marble surface, studio lighting, clean white background, product photography
+A premium leather laptop bag on a reclaimed wood desk, warm afternoon light filtering through blinds, lifestyle shot
+Matte black noise-cancelling headphones resting on a white marble slab, soft directional shadows, minimal aesthetic
+A hand-thrown ceramic plant pot with a trailing pothos, bright indirect light, cozy home office setting
+A brushed stainless steel water bottle on a gym bench, morning light, active lifestyle product shot
