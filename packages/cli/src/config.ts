@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -28,6 +28,7 @@ export function readConfig(): Config {
 export function writeConfig(config: Config): void {
   ensureConfigDir();
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + "\n");
+  chmodSync(CONFIG_FILE, 0o600);
 }
 
 export function getApiKey(): string {

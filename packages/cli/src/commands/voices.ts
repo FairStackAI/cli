@@ -3,7 +3,7 @@ import { listVoices } from "../api.js";
 import { handleError, printJson, printTable } from "../output.js";
 
 export const voicesCommand = new Command("voices")
-  .description("Browse the voice library (168 voices)")
+  .description("Browse the voice library")
   .option("-g, --gender <gender>", "Filter by gender: male, female")
   .option("-a, --archetype <type>", "Filter by archetype: narrator, conversational, character, ...")
   .option("-l, --language <code>", "Filter by language code: en, es, fr, ...")

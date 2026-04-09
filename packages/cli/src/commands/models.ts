@@ -18,7 +18,7 @@ export const modelsCommand = new Command("models")
         return;
       }
 
-      const res = await listModels();
+      const res = await listModels(opts.modality);
       const data = res.data;
 
       const modalities: string[] = opts.modality

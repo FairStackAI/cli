@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import { loginCommand } from "./commands/login.js";
 import { imageCommand } from "./commands/image.js";
@@ -14,7 +15,12 @@ import { estimateCommand } from "./commands/estimate.js";
 import { selectCommand } from "./commands/select.js";
 import { balanceCommand } from "./commands/balance.js";
 import { statusCommand } from "./commands/status.js";
+import { styleCommand } from "./commands/style.js";
+import { generateCommand } from "./commands/generate.js";
 import { reelCommand } from "./commands/reel/index.js";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
 
 const program = new Command();
 
@@ -23,7 +29,7 @@ program
   .description(
     "FairStack CLI — generate images, video, voice, and music at fair prices"
   )
-  .version("0.1.0");
+  .version(pkg.version);
 
 // Auth
 program.addCommand(loginCommand);
@@ -43,6 +49,8 @@ program.addCommand(estimateCommand);
 program.addCommand(selectCommand);
 program.addCommand(balanceCommand);
 program.addCommand(statusCommand);
+program.addCommand(styleCommand);
+program.addCommand(generateCommand);
 
 // Reel production pipeline
 program.addCommand(reelCommand);
