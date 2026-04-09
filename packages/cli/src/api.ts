@@ -1,4 +1,5 @@
 import { getApiKey, getBaseUrl } from "./config.js";
+import { isDryRun, buildDryRunOutput, buildMockResponse } from "./mock.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -113,295 +114,8 @@ export interface ApiError {
   };
 }
 
-// ── Dry Run ───────────────────────────────────────────────────────────
-
-/**
- * When FAIRSTACK_DRY_RUN=1 is set, all API requests are intercepted:
- * the full request (method, url, headers, body) is printed as JSON and
- * a mock response is returned so the CLI can complete without errors.
- *
- * This is used by the test suite to validate every CLI command without
- * making real API calls or spending credits.
- */
-export function isDryRun(): boolean {
-  return process.env.FAIRSTACK_DRY_RUN === "1";
-}
-
-function maskApiKey(key: string): string {
-  if (key.length <= 10) return key.slice(0, 4) + "***";
-  return key.slice(0, 8) + "***" + key.slice(-3);
-}
-
-function buildDryRunOutput(
-  method: string,
-  url: string,
-  headers: Record<string, string>,
-  body?: Record<string, unknown>
-): Record<string, unknown> {
-  const masked = { ...headers };
-  if (masked["Authorization"]) {
-    masked["Authorization"] = `Bearer ${maskApiKey(masked["Authorization"].replace("Bearer ", ""))}`;
-  }
-
-  const output: Record<string, unknown> = { method, url, headers: masked };
-  if (body) output.body = body;
-  return output;
-}
-
-/**
- * Mock responses that match the EXACT shapes observed in production.
- * Each endpoint returns its real format — no invented fields.
- *
- * Key difference: image submit is FLAT, video/voice/music/talking-head
- * submit is WRAPPED inside a `data` object. The generate() parser
- * handles both via separate code paths.
- */
-
-// Permanent test assets on our CDN (real generations, won't 404)
-const MOCK_IMAGE_URL = "https://media.fairstack.ai/image/122efc51-35ed-4ac6-aeae-26960429c3cd/78dffe77-9569-4445-8223-9e6da3a96ddb.png";
-const MOCK_VOICE_URL = "https://media.fairstack.ai/voice/122efc51-35ed-4ac6-aeae-26960429c3cd/dfb31ad3-dc48-4bbc-a75c-3f4e3cdd4f4a.wav";
-
-function buildMockResponse<T>(path: string, method: string, body?: Record<string, unknown>): T {
-  const now = new Date().toISOString();
-  const genId = `gen_mock_${Date.now().toString(36)}`;
-
-  // ── Quote response (confirm: false) ──
-  if (body && body.confirm === false) {
-    return {
-      mock: true,
-      request_id: "req_mock_quote_001",
-      data: {
-        quote_id: "qt_mock_001",
-        estimated_cost: { cost: 0.039, cost_micro: 39000, currency: "USD" },
-        expires_at: new Date(Date.now() + 60_000).toISOString(),
-        expires_in_sec: 60,
-      },
-    } as T;
-  }
-
-  // ── Image submit — FLAT (no data wrapper) ──
-  // Production shape: {status, generation_id, model, poll_url, dashboard_url, estimated_cost_micro}
-  if (method === "POST" && /\/image\/generate/.test(path)) {
-    const model = (body?.model as string) || "flux-schnell";
-    return {
-      mock: true,
-      status: "queued",
-      generation_id: genId,
-      model,
-      poll_url: `/v1/generations/${genId}`,
-      dashboard_url: `https://fairstack.ai/app/library/${genId}`,
-      estimated_cost_micro: 3600,
-    } as T;
-  }
-
-  // ── Video submit — WRAPPED (inside data) ──
-  // Production shape: {request_id, data: {generation_id, job_id, status, poll_url, estimated_wait_sec, estimated_cost, estimated_cost_micro, currency, created_at, dashboard_url, tags}}
-  if (method === "POST" && /\/video\/generate/.test(path)) {
-    return {
-      mock: true,
-      request_id: `req_mock_${Date.now().toString(36)}`,
-      data: {
-        generation_id: genId,
-        job_id: genId,
-        status: "queued",
-        poll_url: `/v1/generations/${genId}`,
-        estimated_wait_sec: 60,
-        estimated_cost: 0.084,
-        estimated_cost_micro: 84000,
-        currency: "USD",
-        created_at: now,
-        dashboard_url: `https://fairstack.ai/app/generations/${genId}`,
-        tags: [],
-      },
-    } as T;
-  }
-
-  // ── Voice submit — WRAPPED ──
-  if (method === "POST" && /\/voice\/generate/.test(path)) {
-    return {
-      mock: true,
-      request_id: `req_mock_${Date.now().toString(36)}`,
-      data: {
-        generation_id: genId,
-        job_id: genId,
-        status: "queued",
-        poll_url: `/v1/generations/${genId}`,
-        estimated_wait_sec: 15,
-        estimated_cost: 0.012,
-        estimated_cost_micro: 12000,
-        currency: "USD",
-        created_at: now,
-        dashboard_url: `https://fairstack.ai/app/generations/${genId}`,
-        tags: [],
-      },
-    } as T;
-  }
-
-  // ── Music submit — WRAPPED ──
-  if (method === "POST" && /\/music\/generate/.test(path)) {
-    return {
-      mock: true,
-      request_id: `req_mock_${Date.now().toString(36)}`,
-      data: {
-        generation_id: genId,
-        job_id: genId,
-        status: "queued",
-        poll_url: `/v1/generations/${genId}`,
-        estimated_wait_sec: 90,
-        estimated_cost: 0.120,
-        estimated_cost_micro: 120000,
-        currency: "USD",
-        created_at: now,
-        dashboard_url: `https://fairstack.ai/app/generations/${genId}`,
-        tags: [],
-      },
-    } as T;
-  }
-
-  // ── Talking-head submit — WRAPPED ──
-  if (method === "POST" && /\/talking-head\/generate/.test(path)) {
-    return {
-      mock: true,
-      request_id: `req_mock_${Date.now().toString(36)}`,
-      data: {
-        generation_id: genId,
-        job_id: genId,
-        status: "queued",
-        poll_url: `/v1/generations/${genId}`,
-        estimated_wait_sec: 120,
-        estimated_cost: 0.096,
-        estimated_cost_micro: 96000,
-        currency: "USD",
-        created_at: now,
-        dashboard_url: `https://fairstack.ai/app/generations/${genId}`,
-        tags: [],
-      },
-    } as T;
-  }
-
-  // ── Select model ──
-  if (path === "/v1/select-model") {
-    return {
-      mock: true,
-      request_id: "req_mock_select_001",
-      data: {},
-      recommendation: {
-        model: "flux-schnell",
-        display_name: "FLUX.1 Schnell",
-        cost_per_unit: 0.003,
-        unit: "image",
-        reasoning: "Best balance of speed and quality for general image generation.",
-      },
-      alternatives: [
-        {
-          model: "seedream-4.5-t2i",
-          display_name: "Seedream 4.5",
-          cost_per_unit: 0.039,
-          unit: "image",
-          tradeoff: "Higher quality photorealism, 10x cost",
-        },
-      ],
-      cost: { cost_usd: 0.002 },
-    } as T;
-  }
-
-  // ── Models list ──
-  if (path === "/v1/models" && method === "GET") {
-    const stub = [{
-      id: "flux-schnell", name: "FLUX.1 Schnell", type: "t2i", price: 0.003,
-      provider: "runpod", cost_per_request: 0.003, quality_tier: "standard",
-      accepts_image: false, supported_params: ["prompt", "aspect_ratio", "seed"],
-      parameter_options: {}, tagline: "Fast, high-quality image generation",
-      best_for: ["drafts", "iteration"], competitor_price: null,
-      competitor_name: null, cheapest_in_type: true,
-    }];
-    return {
-      mock: true,
-      request_id: "req_mock_models_001",
-      data: {
-        pricing: { note: "All prices = infrastructure cost + 20% margin" },
-        image: stub, video: stub, voice: stub, talkingHead: stub, music: stub,
-        threeD: [], quality_tiers: {},
-      },
-    } as T;
-  }
-
-  // ── Model detail ──
-  if (/^\/v1\/models\//.test(path) && method === "GET") {
-    const modelId = path.split("/").pop();
-    return {
-      mock: true,
-      request_id: "req_mock_detail_001",
-      data: {
-        id: modelId, name: modelId, type: "t2i", provider: "runpod",
-        pricing: { cost_per_request: 0.003, currency: "USD" },
-        parameters: { prompt: { type: "string", required: true } },
-      },
-    } as T;
-  }
-
-  // ── Voices ──
-  if (path.startsWith("/v1/voices")) {
-    return {
-      mock: true,
-      voices: [{
-        id: "internal_marco", name: "Marco", archetype: "narrator",
-        accent: "latin-american", gender: "male", language: "en",
-        tags: ["warm", "internal"],
-        description: "Warm Latin narrator with a grounded, natural delivery",
-        sampleUrl: MOCK_VOICE_URL,
-        avatarUrl: MOCK_IMAGE_URL,
-      }],
-      pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
-    } as T;
-  }
-
-  // ── Account / balance ──
-  if (path === "/v1/account") {
-    return {
-      mock: true,
-      request_id: "req_mock_account_001",
-      data: {
-        id: "usr_mock_001", name: "Test User", email: "test@fairstack.ai",
-        plan: { name: "standard", description: "Standard" },
-        credits: { balance_microdollars: 100_000_000, balance_usd: 100.0 },
-        spending_cap: {
-          monthly_microdollars: null, monthly_usd: null,
-          used_this_month_microdollars: 5_200_000, used_this_month_usd: 5.2,
-        },
-      },
-    } as T;
-  }
-
-  // ── Generation status (poll result) ──
-  // This is the response from GET /v1/generations/:id — same shape for all modalities
-  if (/^\/v1\/generations\//.test(path) && method === "GET") {
-    const id = path.split("/").pop()!;
-    const startedAt = new Date(Date.now() - 1200).toISOString();
-    return {
-      mock: true,
-      request_id: "req_mock_status_001",
-      data: {
-        id,
-        type: "image",
-        status: "succeeded",
-        model: "flux-schnell",
-        input: {},
-        output: { url: MOCK_IMAGE_URL, meta: {} },
-        error: null,
-        created_at: startedAt,
-        started_at: startedAt,
-        completed_at: now,
-        cost: { credits_used: 3600, estimated_credits: 3600, currency: "microdollars" },
-        metrics: { queue_time_ms: 45, generation_time_ms: 1100 },
-        urls: {},
-      },
-    } as T;
-  }
-
-  // Fallback
-  return { mock: true, request_id: "req_mock_fallback", data: {} } as T;
-}
+// Re-export isDryRun for consumers that need it
+export { isDryRun } from "./mock.js";
 
 // ── HTTP Client ────────────────────────────────────────────────────────
 
@@ -563,7 +277,7 @@ async function generate(
       if (genRes.data.status === "succeeded") return genRes;
       return pollUntilDone(genRes.data.id);
     }
-    // Wrapped submit response (data.generation_id — from /v1/video/generate etc.)
+    // Wrapped submit response (data.generation_id -- from /v1/video/generate etc.)
     if ("generation_id" in d) {
       return pollUntilDone(d.generation_id as string);
     }
@@ -575,7 +289,7 @@ async function generate(
     return pollUntilDone(submit.generation_id);
   }
 
-  // Unknown format — return as-is
+  // Unknown format -- return as-is
   return raw as unknown as GenerationResponse;
 }
 
@@ -659,7 +373,8 @@ export async function generateTalkingHead(
 export async function listModels(
   modality?: string
 ): Promise<ModelListResponse> {
-  return request<ModelListResponse>("/v1/models", { auth: false });
+  const qs = modality ? `?modality=${encodeURIComponent(modality)}` : "";
+  return request<ModelListResponse>(`/v1/models${qs}`, { auth: false });
 }
 
 export async function getModelDetail(
@@ -681,10 +396,15 @@ export async function listVoices(params: {
     if (v !== undefined) qs.set(k, String(v));
   }
   const query = qs.toString();
-  return request<VoiceListResponse>(
+  const raw = await request<{ data: VoiceListResponse } | VoiceListResponse>(
     `/v1/voices${query ? "?" + query : ""}`,
     { auth: false }
   );
+  // API wraps response in { request_id, data: { voices, pagination } }
+  if ("data" in raw && raw.data && typeof raw.data === "object" && "voices" in raw.data) {
+    return raw.data as VoiceListResponse;
+  }
+  return raw as VoiceListResponse;
 }
 
 export async function selectModel(
@@ -724,4 +444,136 @@ export async function getGeneration(
   id: string
 ): Promise<GenerationResponse> {
   return request<GenerationResponse>(`/v1/generations/${id}`);
+}
+
+// ── Style CRUD ───────────────────────────────────────────────────────
+
+export interface StyleResponse {
+  request_id: string;
+  data: {
+    styles: StyleItem[];
+    categories: { id: string; label: string; description: string; count: number }[];
+    total: number;
+    preset_count: number;
+    custom_count: number;
+  };
+}
+
+export interface StyleItem {
+  id: string;
+  name: string;
+  type: "preset" | "custom";
+  category?: string;
+  description?: string;
+  prompt_prefix: string;
+  prompt_suffix: string;
+  negative_prompt: string;
+  recommended_models: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function listStyles(): Promise<StyleResponse> {
+  return request<StyleResponse>("/v1/styles", { auth: true });
+}
+
+export async function getStyle(
+  nameOrId: string
+): Promise<{ request_id: string; data: StyleItem }> {
+  return request(`/v1/styles/${encodeURIComponent(nameOrId)}`);
+}
+
+export async function createStyle(params: {
+  name: string;
+  prompt_prefix?: string;
+  prompt_suffix?: string;
+  negative_prompt?: string;
+  recommended_models?: string[];
+}): Promise<{ request_id: string; data: StyleItem }> {
+  return request("/v1/styles", {
+    method: "POST",
+    body: params as Record<string, unknown>,
+  });
+}
+
+export async function deleteStyle(
+  id: string
+): Promise<{ request_id: string; data: { deleted: boolean; id: string; name: string } }> {
+  return request(`/v1/styles/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ── Generate at Scale ────────────────────────────────────────────────
+
+export interface BatchGenerateResponse {
+  request_id: string;
+  data: {
+    batch_id: string;
+    status: string;
+    total_prompts: number;
+    estimated_cost: {
+      total_usd: number;
+      per_image_usd: number;
+      credits_micro: number;
+    };
+    model: string;
+    upgrade_model: string | null;
+    style: string | null;
+    poll_url: string;
+    review_url: string;
+  };
+}
+
+export interface BatchStatusResponse {
+  request_id: string;
+  data: {
+    batch_id: string;
+    status: string;
+    progress: {
+      completed: number;
+      running: number;
+      pending: number;
+      failed: number;
+    };
+    cost: {
+      incurred_usd: number;
+      estimated_total_usd: number;
+    };
+    model: string;
+    upgrade_model: string | null;
+    style: string | null;
+    total_prompts: number;
+    generations: Array<{
+      index: number;
+      generation_id: string;
+      status: string;
+      prompt: string;
+      model: string;
+      output_url?: string;
+      cost_micro?: number;
+      upgraded: boolean;
+      error?: string;
+    }>;
+  };
+}
+
+export async function generateAtScale(params: {
+  modality: string;
+  prompts?: string[];
+  prompts_url?: string;
+  style?: string;
+  model: string;
+  upgrade_model?: string;
+  search_prompt?: boolean;
+  options?: Record<string, unknown>;
+}): Promise<BatchGenerateResponse> {
+  return request<BatchGenerateResponse>("/v1/generate", {
+    method: "POST",
+    body: params as Record<string, unknown>,
+  });
+}
+
+export async function getBatchStatus(
+  batchId: string
+): Promise<BatchStatusResponse> {
+  return request<BatchStatusResponse>(`/v1/generate/${batchId}`);
 }

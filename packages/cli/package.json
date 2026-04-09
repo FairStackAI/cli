@@ -1,29 +1,47 @@
 {
   "name": "fairstack",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "FairStack CLI — generate images, video, voice, and music from your terminal",
+  "types": "./dist/index.d.ts",
   "bin": {
     "fairstack": "./dist/index.js"
   },
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "files": [
-    "dist"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "LICENSE",
+    "README.md"
   ],
   "keywords": [
     "ai",
     "image-generation",
     "video-generation",
-    "voice-generation",
-    "music-generation",
+    "voice",
+    "tts",
+    "music",
     "fairstack",
-    "generative-ai",
     "cli"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fairstackai/cli.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://fairstack.ai",
+  "author": "FairStack <support@fairstack.ai>",
+  "bugs": {
+    "url": "https://github.com/fairstackai/cli/issues"
+  },
   "license": "MIT",
   "dependencies": {
     "commander": "^13.1.0"
